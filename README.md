@@ -1,6 +1,6 @@
 # Weather App is created with React JS
 
-Link - http://f0457791.xsph.ru/weather-app/
+Link - https://weather-app-react-2020.netlify.app
 
 ---
 
