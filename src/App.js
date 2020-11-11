@@ -1,10 +1,11 @@
-import React from 'react'
+import React, { useState } from 'react'
 import apikey from './apikey'
-import WeatherNowComponent from './components/WeatherNowComponent'
-import WeatherDailyComponent from './components/WeatherDailyComponent'
+import CurrentWeather from './components/CurrentWeather'
+import DailyWeather from './components/DailyWeather'
+import Alert from './components/Alert'
 
 const url = (city) =>
-  `http://api.openweathermap.org/data/2.5/weather?q=${city}&APPID=${apikey}`
+  `https://api.openweathermap.org/data/2.5/weather?q=${city}&APPID=${apikey}`
 
 const dailyUrl = (lat, lon) =>
   `https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&exclude=minutely,hourly&appid=${apikey}`
@@ -12,95 +13,92 @@ const dailyUrl = (lat, lon) =>
 const imgUrl = (city) =>
   `https://api.teleport.org/api/urban_areas/slug:${city}/images/`
 
-class App extends React.Component {
-  state = {
-    search: '',
-    dataNow: [],
+const App = () => {
+  const [search, setSearch] = useState('')
+  const [dataNow, setDataNow] = useState({
     tempNow: '',
     city: '',
     country: '',
     weatherNow: '',
-    bgImg: '',
     lat: '',
     lon: '',
-    dailyData: '',
+  })
+  const [dailyData, setDailyData] = useState(null)
+  const [bgImg, setBgImg] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [alert, setAlert] = useState({ show: false, msg: '' })
+
+  const showAlert = (show = false, msg = '') => {
+    setAlert({ show, msg })
   }
 
-  async getDailyWeather() {
-    const resp = await fetch(dailyUrl(this.state.lat, this.state.lon))
+  const getCurrentWeather = async () => {
+    const resp = await fetch(url(search))
     const respData = await resp.json()
-    this.setState({ dailyData: respData.daily })
+    if (respData.cod < '400') {
+      showAlert(true, 'city found')
+      const temp = KtoC(respData.main.temp)
+      setDataNow({
+        tempNow: temp,
+        city: respData.name,
+        country: respData.sys.country,
+        weatherNow: respData.weather[0].main,
+        lat: respData.coord.lat,
+        lon: respData.coord.lon,
+      })
+      getCityImage()
+      getDailyWeather(respData.coord.lat, respData.coord.lon)
+      setLoading(false)
+    } else {
+      showAlert(true, respData.message)
+    }
   }
 
-  async getCityImage() {
-    const resp = await fetch(imgUrl(this.state.search))
+  const getDailyWeather = async (lat, lon) => {
+    const resp = await fetch(dailyUrl(lat, lon))
+    const respData = await resp.json()
+    setDailyData(respData.daily)
+  }
+
+  const getCityImage = async () => {
+    const resp = await fetch(imgUrl(search))
     const respData = await resp.json()
     respData.photos
-      ? this.setState({ bgImg: respData.photos[0].image.mobile })
-      : this.setState({
-          bgImg:
-            'https://media.moddb.com/images/members/4/3158/3157353/image_error_full.png',
-        })
+      ? setBgImg(respData.photos[0].image.mobile)
+      : setBgImg(
+          'https://media.moddb.com/images/members/4/3158/3157353/image_error_full.png'
+        )
   }
 
-  KtoC(K) {
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    getCurrentWeather()
+  }
+
+  const KtoC = (K) => {
     return Math.floor(K - 273.15)
   }
 
-  handleChange = (event) => {
-    const { name, value } = event.target
-    this.setState({ [name]: value })
-  }
-
-  handleSubmit = (event) => {
-    event.preventDefault()
-    fetch(url(this.state.search))
-      .then((resp) => resp.json())
-      .then((resp) => {
-        if (resp.cod !== '404' && resp.cod !== '400') {
-          const temp = this.KtoC(resp.main.temp)
-          this.setState({
-            dataNow: resp,
-            tempNow: temp,
-            city: resp.name,
-            country: resp.sys.country,
-            weatherNow: resp.weather[0].main,
-            lat: resp.coord.lat,
-            lon: resp.coord.lon,
-          })
-          this.getDailyWeather()
-          this.getCityImage()
-        } else {
-          alert(resp.message)
-        }
-      })
-  }
-
-  render() {
-    return (
-      <main className='main'>
-        <div className='weather-now'>
-          <form className='weather-form' onSubmit={this.handleSubmit}>
-            <input
-              type='text'
-              name='search'
-              placeholder='Search by location'
-              autoComplete='off'
-              value={this.state.search}
-              onChange={this.handleChange}
-            />
-            <button>Search</button>
-          </form>
-          {this.state.tempNow === '' ? null : (
-            <WeatherNowComponent {...this.state} />
-          )}
-        </div>
-        {this.state.dailyData === '' ? null : (
-          <WeatherDailyComponent {...this.state} KtoC={this.KtoC} />
-        )}
-      </main>
-    )
-  }
+  return (
+    <main className='main'>
+      {alert.show && <Alert {...alert} removeAlert={showAlert} />}
+      <div className='weather-now'>
+        <form className='weather-form' onSubmit={handleSubmit}>
+          <input
+            type='text'
+            name='search'
+            placeholder='Search by location'
+            autoComplete='off'
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <button>Search</button>
+        </form>
+        {!loading && <CurrentWeather dataNow={dataNow} bgImg={bgImg} />}
+      </div>
+      {dailyData && <DailyWeather dailyData={dailyData} KtoC={KtoC} />}
+    </main>
+  )
 }
 
 export default App
